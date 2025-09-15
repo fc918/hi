@@ -13,29 +13,15 @@ const flash = "dm1lc3M=";
 const v2 = "djJyYXk=";
 const neko = "Y2xhc2g=";
 
-// 10个内置的Cloudflare优选域名
-const CUSTOM_DOMAINS = [
-    "www.visa.com",
-    "www.msn.com",
-    "www.icbc.com.cn",
-    "www.reuters.com",
-    "www.aol.com",
-    "cdn.anycast.eu.org",
-    "cdn-all.xn--b6gac.eu.org",
-    "edgetunnel.anycast.eu.org",
-    "www.speedtest.net",
-    "www.hugedomains.com"
-];
-
-const PORTS = [443, 2053, 2083, 2087, 2096]; // 5个TLS端口
-const PROTOCOLS = [atob(horse)]; // 仅保留trojan协议
+const PORTS = [443, 2053, 2083, 2087, 2096]; // Enabled 5 TLS ports
+const PROTOCOLS = [atob(horse)]; // Removed ss and vmess
 const SUB_PAGE_URL = "https://foolvpn.me/nautica";
 const KV_PRX_URL = "https://raw.githubusercontent.com/FoolVPN-ID/Nautica/refs/heads/main/kvProxyList.json";
 const PRX_BANK_URL = "https://raw.githubusercontent.com/FoolVPN-ID/Nautica/refs/heads/main/proxyList.txt";
 const DNS_SERVER_ADDRESS = "8.8.8.8";
 const DNS_SERVER_PORT = 53;
 const RELAY_SERVER_UDP = {
-host: "udp-relay.hobihaus.space",
+host: "udp-relay.hobihaus.space", // Kontribusi atau cek relay publik disini: https://hub.docker.com/r/kelvinzer0/udp-relay
 port: 7300,
 };
 const PRX_HEALTH_CHECK_API = "https://id1.foolvpn.me/api/v1/check";
@@ -62,6 +48,16 @@ return {};
 }
 
 async function getPrxList(prxBankUrl = PRX_BANK_URL) {
+/**
+
+Format:
+
+<IP>,<Port>,<Country ID>,<ORG>
+
+Contoh:
+
+1.1.1.1,443,SG,Cloudflare Inc.
+*/
 if (!prxBankUrl) {
 throw new Error("No URL Provided!");
 }
@@ -118,10 +114,12 @@ APP_DOMAIN = url.hostname;
 serviceName = APP_DOMAIN.split(".")[0];
 const upgradeHeader = request.headers.get("Upgrade");
 
+  // Handle prx client
   if (upgradeHeader === "websocket") {
     const prxMatch = url.pathname.match(/^\/(.+[:=-]\d+)$/);
 
     if (url.pathname.length == 3 || url.pathname.match(",")) {
+      // Contoh: /ID, /SG, dll
       const prxKeys = url.pathname.replace("/", "").toUpperCase().split(",");
       const prxKey = prxKeys[Math.floor(Math.random() * prxKeys.length)];
       const kvPrx = await getKVPrxList();
@@ -155,18 +153,21 @@ const upgradeHeader = request.headers.get("Upgrade");
       const filterCC = url.searchParams.get("cc")?.split(",") || [];
       const filterPort = url.searchParams.get("port")?.split(",") || PORTS;
       const filterVPN = url.searchParams.get("vpn")?.split(",") || PROTOCOLS;
-      const filterLimit = parseInt(url.searchParams.get("limit")) || 9999;
+      const filterLimit = parseInt(url.searchParams.get("limit")) || 9999; // Changed limit to 9999
       const filterFormat = url.searchParams.get("format") || "raw";
-      
+      const fillerDomain = url.searchParams.get("domain") || APP_DOMAIN;
+
       const prxBankUrl = url.searchParams.get("prx-list") || env.PRX_BANK_URL;
       const prxList = await getPrxList(prxBankUrl)
         .then((prxs) => {
+          // Filter CC
           if (filterCC.length) {
             return prxs.filter((prx) => filterCC.includes(prx.country));
           }
           return prxs;
         })
         .then((prxs) => {
+          // shuffle result
           shuffleArray(prxs);
           return prxs;
         });
@@ -174,13 +175,10 @@ const upgradeHeader = request.headers.get("Upgrade");
       const uuid = crypto.randomUUID();
       const result = [];
       for (const prx of prxList) {
-        // 从内置域名列表中随机选择一个域名
-        const randomDomain = CUSTOM_DOMAINS[Math.floor(Math.random() * CUSTOM_DOMAINS.length)];
-
-        const uri = new URL(`${atob(horse)}://${randomDomain}`);
+        const uri = new URL(`${atob(horse)}://${fillerDomain}`);
         uri.searchParams.set("encryption", "none");
         uri.searchParams.set("type", "ws");
-        uri.searchParams.set("host", randomDomain);
+        uri.searchParams.set("host", APP_DOMAIN);
 
         for (const port of filterPort) {
           for (const protocol of filterVPN) {
@@ -189,11 +187,11 @@ const upgradeHeader = request.headers.get("Upgrade");
             uri.protocol = protocol;
             uri.port = port.toString();
             uri.username = uuid;
-            uri.searchParams.set("security", "tls");
-            uri.searchParams.set("sni", randomDomain);
+            uri.searchParams.set("security", "tls"); // Always tls
+            uri.searchParams.set("sni", APP_DOMAIN);
             uri.searchParams.set("path", `/${prx.prxIP}-${prx.prxPort}`);
 
-            uri.hash = `${result.length + 1} ${getFlagEmoji(prx.country)} ${prx.org} WS TLS [${serviceName}]`;
+            uri.hash = `${result.length + 1} ${getFlagEmoji(prx.country)} ${prx.org} WS TLS [${serviceName}]`; // Removed NTLS
             result.push(uri.toString());
           }
         }
@@ -223,7 +221,9 @@ const upgradeHeader = request.headers.get("Upgrade");
           } else {
             return new Response(res.statusText, {
               status: res.status,
-              headers: { ...CORS_HEADER_OPTIONS },
+              headers: {
+                ...CORS_HEADER_OPTIONS,
+              },
             });
           }
           break;
@@ -231,7 +231,9 @@ const upgradeHeader = request.headers.get("Upgrade");
 
       return new Response(finalResult, {
         status: 200,
-        headers: { ...CORS_HEADER_OPTIONS },
+        headers: {
+          ...CORS_HEADER_OPTIONS,
+        },
       });
     } else if (apiPath.startsWith("/myip")) {
       return new Response(
@@ -244,7 +246,9 @@ const upgradeHeader = request.headers.get("Upgrade");
           ...request.cf,
         }),
         {
-          headers: { ...CORS_HEADER_OPTIONS },
+          headers: {
+            ...CORS_HEADER_OPTIONS,
+          },
         }
       );
     }
@@ -255,9 +259,12 @@ const upgradeHeader = request.headers.get("Upgrade");
 } catch (err) {
   return new Response(`An error occurred: ${err.toString()}`, {
     status: 500,
-    headers: { ...CORS_HEADER_OPTIONS },
+    headers: {
+      ...CORS_HEADER_OPTIONS,
+    },
   });
 }
+
 },
 };
 
@@ -385,7 +392,8 @@ return atob(horse);
 }
 }
 
-return atob(flash); // Fallback
+// Fallback to vmess
+return atob(flash);
 }
 
 async function handleTCPOutBound(
@@ -408,6 +416,7 @@ const writer = tcpSocket.writable.getWriter();
 await writer.write(rawClientData);
 writer.releaseLock();
 return tcpSocket;
+
 }
 
 async function retry() {
@@ -548,16 +557,16 @@ let addressLength = 0;
 let addressValueIndex = addressIndex + 1;
 let addressValue = "";
 switch (addressType) {
-case 1:
+case 1: // For IPv4
 addressLength = 4;
 addressValue = new Uint8Array(buffer.slice(addressValueIndex, addressValueIndex + addressLength)).join(".");
 break;
-case 2:
+case 2: // For Domain
 addressLength = new Uint8Array(buffer.slice(addressValueIndex, addressValueIndex + 1))[0];
 addressValueIndex += 1;
 addressValue = new TextDecoder().decode(buffer.slice(addressValueIndex, addressValueIndex + addressLength));
 break;
-case 3:
+case 3: // For IPv6
 addressLength = 16;
 const dataView = new DataView(buffer.slice(addressValueIndex, addressValueIndex + addressLength));
 const ipv6 = [];
@@ -569,7 +578,7 @@ break;
 default:
 return {
 hasError: true,
-message: `invalid addressType is ${addressType}`,
+message: `invild  addressType is ${addressType}`,
 };
 }
 if (!addressValue) {
@@ -614,16 +623,16 @@ let addressLength = 0;
 let addressValueIndex = 2;
 let addressValue = "";
 switch (addressType) {
-case 1:
+case 1: // For IPv4
 addressLength = 4;
 addressValue = new Uint8Array(dataBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join(".");
 break;
-case 3:
+case 3: // For Domain
 addressLength = new Uint8Array(dataBuffer.slice(addressValueIndex, addressValueIndex + 1))[0];
 addressValueIndex += 1;
 addressValue = new TextDecoder().decode(dataBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
 break;
-case 4:
+case 4: // For IPv6
 addressLength = 16;
 const dataView = new DataView(dataBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
 const ipv6 = [];
@@ -735,11 +744,19 @@ return [...new Uint8Array(buffer)].map((x) => x.toString(16).padStart(2, "0")).j
 function shuffleArray(array) {
 let currentIndex = array.length;
 
+// While there remain elements to shuffle...
 while (currentIndex != 0) {
+// Pick a remaining element...
 let randomIndex = Math.floor(Math.random() * currentIndex);
 currentIndex--;
+// And swap it with the current element.
 [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+
 }
+}
+
+function reverse(s) {
+return s.split("").reverse().join("");
 }
 
 function getFlagEmoji(isoCode) {
