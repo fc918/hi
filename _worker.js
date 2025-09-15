@@ -274,7 +274,11 @@ function shuffleArray(array) {
 }
 
 function getFlagEmoji(isoCode) {
-  if (!isoCode || isoCode.length !== 2) return "🏳️";
-  const codePoints = isoCode.toUpperCase().split("").map((char) => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...points);
+  if (!isoCode || typeof isoCode !== "string") return "🏳️";
+  const s = isoCode.toUpperCase().slice(0, 2);
+  if (!/^[A-Z]{2}$/.test(s)) return "🏳️"; // 非标准 ISO2 时返回白旗
+
+  const BASE = 127397; // regional indicator symbol letter A 的起点
+  const codePoints = s.split("").map(ch => BASE + ch.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
 }
